@@ -12,13 +12,13 @@ import thc.sandbox.marketmanager.data.LastSize
 
 object TestStrategy extends StrategyCreator {
 	
-	def create(ar: ActorRef, money: Double)(implicit as: ActorSystem): ActorRef = {
-		as.actorOf(Props(creator=new TestStrategy(ar, money)), "TestStrategy")
+	def create(ar: ActorRef, symbol: String, money: Double)(implicit as: ActorSystem): ActorRef = {
+		as.actorOf(Props(creator=new TestStrategy(ar, symbol, money)), symbol)
 	}
 	
 }
 
-class TestStrategy(val manager: ActorRef, var money: Double) extends Strategy with Logger {
+class TestStrategy(val manager: ActorRef, symbol: String, var money: Double) extends Strategy with Logger {
 	
 	val averageVolume = new MovingAverage[Double](100)
 	val STaveragePrice = new MovingAverage[Double](10)
@@ -36,11 +36,11 @@ class TestStrategy(val manager: ActorRef, var money: Double) extends Strategy wi
 				averageVolume.add(size)
 			case _ => return
 		}
-		logger.info(f"price $$$lastPrice%2.2f ST avg price $$${STaveragePrice.avg}%2.2f, MT avg price $$${MTaveragePrice.avg}%2.2f, avg volume ${averageVolume.avg}%2.3f")
+		//logger.info(f"$symbol: price $$$lastPrice%2.2f ST avg price $$${STaveragePrice.avg}%2.2f, MT avg price $$${MTaveragePrice.avg}%2.2f, avg volume ${averageVolume.avg}%2.3f")
 	}
 	
 	def processOrderDataType(odt: OrderDataType) {
-		logger.error(s"received order data type: $odt")
+		logger.error(s"$symbol: received order data type: $odt")
 	}
 	
 }

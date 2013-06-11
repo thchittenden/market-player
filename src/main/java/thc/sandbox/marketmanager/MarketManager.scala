@@ -16,8 +16,10 @@ import thc.sandbox.util.ActorGroup
 
 class MarketManager(val conn: MarketConnection, var money: Double)(implicit val as: ActorSystem) {
 
-	var strategies: List[ActorRef] = List.empty
-	var strategyMoney: mutable.Map[ActorRef, Double] = mutable.HashMap.empty
+	val strategies: mutable.ListBuffer[ActorRef] = mutable.ListBuffer.empty
+	val strategyMoney: mutable.Map[ActorRef, Double] = mutable.HashMap.empty
+	val subscriptions: mutable.Map[Int, DataRequest] = mutable.HashMap.empty
+	
 	
 	val messageProcessor = actor(new Act {
 		become {
@@ -26,8 +28,8 @@ class MarketManager(val conn: MarketConnection, var money: Double)(implicit val 
 	})
 	
 	def addStrategy(strategy: StrategyCreator, symbol: String, initialMoney: Double, allowMargin: Boolean) {
-		val strategyActor = strategy.create(messageProcessor, initialMoney)
-		strategies = strategyActor::strategies
+		val strategyActor = strategy.create(messageProcessor, symbol, initialMoney)
+		strategies.prepend(strategyActor)
 		strategyMoney.put(strategyActor, initialMoney)
 		
 		//subscribe to symbol
@@ -35,7 +37,7 @@ class MarketManager(val conn: MarketConnection, var money: Double)(implicit val 
 	}
 	
 	def subscribe(actors: ActorGroup, dr: DataRequest) {
-		conn.subscribe(actors, dr)
+		subscriptions += (conn.subscribe(actors, dr) -> dr)
 	}
 		
 	def order(actors: ActorGroup, or: OrderRequest) {

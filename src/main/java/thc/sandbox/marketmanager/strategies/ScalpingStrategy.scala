@@ -12,8 +12,8 @@ import thc.sandbox.util.MovingAverage
 
 object ScalpingStrategy extends StrategyCreator {
 	
-	def create(ar: ActorRef, money: Double)(implicit as: ActorSystem): ActorRef = {
-		as.actorOf(Props(creator=new ScalpingStrategy(ar, money)))
+	def create(ar: ActorRef, symbol: String, money: Double)(implicit as: ActorSystem): ActorRef = {
+		as.actorOf(Props(creator=new ScalpingStrategy(ar, money)), symbol)
 	}
 	
 }

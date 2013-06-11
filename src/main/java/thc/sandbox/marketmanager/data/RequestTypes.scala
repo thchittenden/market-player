@@ -1,6 +1,8 @@
 package thc.sandbox.marketmanager.data
 
-abstract sealed class DataRequest
+abstract sealed class DataRequest {
+	val symbol: String
+}
 
 case class SimpleRTStockRequest(symbol: String) extends DataRequest
 

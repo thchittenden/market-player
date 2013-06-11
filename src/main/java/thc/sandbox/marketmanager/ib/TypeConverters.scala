@@ -13,6 +13,7 @@ import thc.sandbox.marketmanager.data.SimpleStockLimitBuyOrder
 object TypeConverters {
 		
 	private final val STOCK_SEC_TYPE = "STK"
+	private final val CURRENCY = "USD"
 	private final val EXCHANGE = "SMART"
 	private final val BUY = "BUY"
 	private final val SELL = "SELL"
@@ -21,6 +22,7 @@ object TypeConverters {
 		
 	implicit def dataRequestAsContract(dr: DataRequest): Contract = {
 		val ret = new Contract()
+		ret.m_currency = CURRENCY
 		ret.m_exchange = EXCHANGE
 		dr match {
 			case SimpleRTStockRequest(symbol) => ret.m_symbol = symbol
@@ -31,6 +33,7 @@ object TypeConverters {
 	
 	implicit def orderRequestAsContract(or: OrderRequest): Contract = {
 		val ret = new Contract()
+		ret.m_currency = CURRENCY
 		ret.m_exchange = EXCHANGE
 		or match {
 			case SimpleStockMarketBuyOrder(symbol: String, _) => 

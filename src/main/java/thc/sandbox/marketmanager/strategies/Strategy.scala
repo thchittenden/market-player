@@ -8,7 +8,7 @@ import thc.sandbox.marketmanager.data.MarketDataType
 
 //strategy creator trait to hold Strategy factory
 trait StrategyCreator {
-	def create(od: ActorRef, money: Double)(implicit as: ActorSystem): ActorRef
+	def create(od: ActorRef, symbol: String, money: Double)(implicit as: ActorSystem): ActorRef
 }
 
 abstract class Strategy extends Actor {

@@ -1,12 +1,14 @@
 package thc.sandbox.marketmanager.ib
 
 import java.util.concurrent.ConcurrentHashMap
+
 import scala.collection.JavaConversions.mapAsScalaConcurrentMap
 import scala.collection.concurrent
 import scala.collection.mutable
-import scala.collection.mutable.HashMap
 import scala.concurrent.Lock
+
 import org.joda.time.DateTime
+
 import com.ib.client.CommissionReport
 import com.ib.client.Contract
 import com.ib.client.ContractDetails
@@ -16,9 +18,10 @@ import com.ib.client.Execution
 import com.ib.client.Order
 import com.ib.client.OrderState
 import com.ib.client.UnderComp
-import TypeConverters._
-import akka.actor.ActorRef
-import akka.actor.actorRef2Scala
+
+import TypeConverters.dataRequestAsContract
+import TypeConverters.orderRequestAsContract
+import TypeConverters.orderRequestAsOrder
 import thc.sandbox.marketmanager.data.AskPrice
 import thc.sandbox.marketmanager.data.AskSize
 import thc.sandbox.marketmanager.data.BidPrice
@@ -28,14 +31,13 @@ import thc.sandbox.marketmanager.data.LastPrice
 import thc.sandbox.marketmanager.data.LastSize
 import thc.sandbox.marketmanager.data.MarketConnection
 import thc.sandbox.marketmanager.data.MarketDataType
-import thc.sandbox.marketmanager.data.OrderDataType
-import thc.sandbox.marketmanager.data.OrderRequest
-import thc.sandbox.slf4s.Logger
-import thc.sandbox.marketmanager.data.OrderStatus
-import thc.sandbox.marketmanager.data.OrderFilled
-import thc.sandbox.util.ActorGroup
-import thc.sandbox.util.ActorGroup
 import thc.sandbox.marketmanager.data.OrderCancelled
+import thc.sandbox.marketmanager.data.OrderDataType
+import thc.sandbox.marketmanager.data.OrderFilled
+import thc.sandbox.marketmanager.data.OrderRequest
+import thc.sandbox.marketmanager.data.OrderStatus
+import thc.sandbox.slf4s.Logger
+import thc.sandbox.util.ActorGroup
 
 class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		
