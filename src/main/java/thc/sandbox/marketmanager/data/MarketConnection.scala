@@ -1,16 +1,17 @@
 package thc.sandbox.marketmanager.data
 
 import akka.actor.ActorRef
+import thc.sandbox.util.ActorGroup
 
+/**
+ * Market Connection interface for brokerage specific implementations
+ */
 trait MarketConnection {
-
-	def connect()
-	def disconnect()
 	
-	def subscribe(a: ActorRef, dr: DataRequest): Int
-	def unsubscribe(a: ActorRef, id: Int)
+	def subscribe(ag: ActorGroup, dr: DataRequest): Int
+	def unsubscribe(ag: ActorGroup, id: Int)
 
-	def placeOrder(a: ActorRef, or: OrderRequest): Int
+	def placeOrder(a: ActorGroup, or: OrderRequest): Int
 	def cancelOrder(id: Int)
 	
 }

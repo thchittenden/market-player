@@ -20,3 +20,4 @@ abstract class OrderDataType {
 
 case class OrderStatus(id: Int, filled: Int, avgFillPrice: Double) extends OrderDataType
 case class OrderFilled(id: Int, avgFillPrice: Double) extends OrderDataType
+case class OrderCancelled(id: Int, filled: Int, avgFillPrice: Double) extends OrderDataType

@@ -33,6 +33,9 @@ import thc.sandbox.marketmanager.data.OrderRequest
 import thc.sandbox.slf4s.Logger
 import thc.sandbox.marketmanager.data.OrderStatus
 import thc.sandbox.marketmanager.data.OrderFilled
+import thc.sandbox.util.ActorGroup
+import thc.sandbox.util.ActorGroup
+import thc.sandbox.marketmanager.data.OrderCancelled
 
 class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		
@@ -51,17 +54,15 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 	val openTickers:  mutable.Map[Int, DataRequest] = mutable.HashMap.empty
 	
 	//maps from ids to the recipients
-	val dataReceivers: concurrent.Map[Int, List[ActorRef]] = new ConcurrentHashMap[Int, List[ActorRef]]()
-	val orderReceivers: concurrent.Map[Int, ActorRef] = new ConcurrentHashMap[Int, ActorRef]()
+	val dataReceivers: concurrent.Map[Int, ActorGroup] = new ConcurrentHashMap[Int, ActorGroup]()
+	val orderReceivers: concurrent.Map[Int, ActorGroup] = new ConcurrentHashMap[Int, ActorGroup]()
 	
-	def connect() {
-		val host = "localhost"
-		val port = 7496
-		val clientId = 1
-		
+	def connect(host: String, port: Int, clientId: Int) {
 		logger.info(s"connecting to $host on port $port with clientId $clientId")
 		clientSocket.eConnect(host, port, clientId)
 	}
+	
+	val isConnected: (() => Boolean) = clientSocket.isConnected
 	
 	def disconnect() {
 		logger.info("disconnecting...")
@@ -71,15 +72,15 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		clientSocket.eDisconnect()
 	}
 	
-	def subscribe(a: ActorRef, dr: DataRequest): Int = {
-		logger.info(s"subscribing $a for $dr")
+	def subscribe(ag: ActorGroup, dr: DataRequest): Int = {
+		logger.info(s"subscribing $ag for $dr")
 		
 		subscribeLock.acquire
 		if(openRequests contains dr) {
 			//add actor to existing requests
 			val tickerId = openRequests(dr)		
 			
-			dataReceivers.put(tickerId, a::dataReceivers(tickerId))
+			dataReceivers.get(tickerId) foreach (_ ++= ag)
 			
 			subscribeLock.release
 			return tickerId
@@ -88,7 +89,7 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 			//open new request
 			val tickerId = curTickerId; curTickerId += 1;
 
-			dataReceivers.put(tickerId, List(a))
+			dataReceivers.put(tickerId, ag)
 			openRequests.put(dr, tickerId)
 			openTickers.put(tickerId, dr)
 			clientSocket.reqMktData(tickerId, dr, "", false)
@@ -98,17 +99,14 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		}
 	}
 	
-	def unsubscribe(a: ActorRef, id: Int) {
+	def unsubscribe(ag: ActorGroup, id: Int) {
 		subscribeLock.acquire
-		val curRecs = dataReceivers.getOrElse(id, Nil)
-		if(curRecs contains a) {
-			val newRecs = curRecs filterNot (_ eq a)
-			if(newRecs.isEmpty) {
+		dataReceivers.get(id) foreach { curRecs => 
+			curRecs --= ag
+			if(curRecs.isEmpty) {
 				clientSocket.cancelMktData(id)
 				openTickers.remove(id) foreach (openRequests.remove(_))
 				dataReceivers.remove(id)
-			} else {
-				dataReceivers.put(id, newRecs)
 			}
 		}
 		subscribeLock.release
@@ -117,21 +115,23 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 
 		
 	def sendMessage(message: MarketDataType) {
-		dataReceivers.get(message.id) foreach { v => v foreach (_ ! message)}
+		dataReceivers.get(message.id) foreach (_ ! message)
 	}
+	
 	def sendMessage(message: OrderDataType) {
 		orderReceivers.get(message.id) foreach (_ ! message)
 	}
 	
-	def placeOrder(a: ActorRef, m: OrderRequest): Int = {
+	def placeOrder(ag: ActorGroup, m: OrderRequest): Int = {
 		orderIdLock.acquire
 		val orderId = curOrderId; curOrderId += 1
 		orderIdLock.release
 		
-		orderReceivers.put(orderId, a) 
+		orderReceivers.put(orderId, ag) 
 		clientSocket.placeOrder(orderId, m, m)
 		return orderId
 	}
+	
 	def cancelOrder(id: Int) { 
 		clientSocket cancelOrder id
 	}
@@ -180,6 +180,8 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		status match {
 			case "Submitted" => sendMessage(OrderStatus(orderId, filled, avgFillPrice))
 			case "Filled"    => sendMessage(OrderFilled(orderId, avgFillPrice))
+								orderReceivers.remove(orderId)
+			case "Cancelled" => sendMessage(OrderCancelled(orderId, filled, avgFillPrice))
 								orderReceivers.remove(orderId)
 			case _ 			 => logger.info(s"unsuppored order status: $status")
 		}
