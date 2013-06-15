@@ -8,8 +8,8 @@ import thc.sandbox.marketmanager.data.RequestTypeContainer
 
 
 abstract class Strategy {
-	
-	val inQueue: RingBuffer[ReceiveTypeContainer]
-	val outQueue: RingBuffer[RequestTypeContainer]
 		
+	val orderQueue: RingBuffer[]
+	val dataQueue: RingBuffer[]
+	
 }
