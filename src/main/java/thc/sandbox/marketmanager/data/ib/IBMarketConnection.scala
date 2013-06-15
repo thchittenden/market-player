@@ -1,14 +1,9 @@
-package thc.sandbox.marketmanager.ib
+package thc.sandbox.marketmanager.data.ib
 
-import java.util.concurrent.ConcurrentHashMap
-
-import scala.collection.JavaConversions.mapAsScalaConcurrentMap
 import scala.collection.concurrent
 import scala.collection.mutable
 import scala.concurrent.Lock
-
 import org.joda.time.DateTime
-
 import com.ib.client.CommissionReport
 import com.ib.client.Contract
 import com.ib.client.ContractDetails
@@ -18,7 +13,6 @@ import com.ib.client.Execution
 import com.ib.client.Order
 import com.ib.client.OrderState
 import com.ib.client.UnderComp
-
 import TypeConverters.dataRequestAsContract
 import TypeConverters.orderRequestAsContract
 import TypeConverters.orderRequestAsOrder
@@ -29,7 +23,7 @@ import thc.sandbox.marketmanager.data.BidSize
 import thc.sandbox.marketmanager.data.DataRequest
 import thc.sandbox.marketmanager.data.LastPrice
 import thc.sandbox.marketmanager.data.LastSize
-import thc.sandbox.marketmanager.data.MarketConnection
+import thc.sandbox.marketmanager.MarketConnection
 import thc.sandbox.marketmanager.data.MarketDataType
 import thc.sandbox.marketmanager.data.OrderCancelled
 import thc.sandbox.marketmanager.data.OrderDataType
@@ -38,99 +32,61 @@ import thc.sandbox.marketmanager.data.OrderRequest
 import thc.sandbox.marketmanager.data.OrderStatus
 import thc.sandbox.slf4s.Logger
 import thc.sandbox.util.ActorGroup
+import com.lmax.disruptor.RingBuffer
+import thc.sandbox.marketmanager.data.RequestTypeContainer
+import thc.sandbox.marketmanager.data.ReceiveTypeContainer
+import thc.sandbox.marketmanager.data.ReceiveType
 
 class IBMarketConnection extends MarketConnection with EWrapper with Logger {
-		
+
+	var callback = (x: ReceiveType) => ();
+	def registerCallback(cb: (ReceiveType => Unit)) {
+		callback = cb;
+	}
+	
 	//create clientSocket
 	val clientSocket = new EClientSocket(this)
 	
 	var curTickerId = 0
 	var curOrderId = 0
 	
-	//need a lock to prevent subscribe/unsubscribe conflicts
-	val subscribeLock = new Lock();
-	val orderIdLock = new Lock();
-	
 	//map both directions for efficient querying either way
 	val openRequests: mutable.Map[DataRequest, Int] = mutable.HashMap.empty
 	val openTickers:  mutable.Map[Int, DataRequest] = mutable.HashMap.empty
-	
-	//maps from ids to the recipients
-	val dataReceivers: concurrent.Map[Int, ActorGroup] = new ConcurrentHashMap[Int, ActorGroup]()
-	val orderReceivers: concurrent.Map[Int, ActorGroup] = new ConcurrentHashMap[Int, ActorGroup]()
-	
+
 	def connect(host: String, port: Int, clientId: Int) {
 		logger.info(s"connecting to $host on port $port with clientId $clientId")
 		clientSocket.eConnect(host, port, clientId)
 	}
 	
-	val isConnected: (() => Boolean) = clientSocket.isConnected
-	
+	def isConnected(): Boolean = clientSocket.isConnected
 	def disconnect() {
 		logger.info("disconnecting...")
-		if(!orderReceivers.isEmpty)
-			logger.warn("orders still open!")
-			
-		clientSocket.eDisconnect()
+		clientSocket.eDisconnect
 	}
 	
-	def subscribe(ag: ActorGroup, dr: DataRequest): Int = {
-		logger.info(s"subscribing $ag for $dr")
-		
-		subscribeLock.acquire
-		if(openRequests contains dr) {
-			//add actor to existing requests
-			val tickerId = openRequests(dr)		
-			
-			dataReceivers.get(tickerId) foreach (_ ++= ag)
-			
-			subscribeLock.release
-			return tickerId
-			
-		} else {
-			//open new request
-			val tickerId = curTickerId; curTickerId += 1;
+	//subscription logic
+	private def subscribeNew(dr: DataRequest): Int = {
+		val tickerId = curTickerId; curTickerId += 1;
 
-			dataReceivers.put(tickerId, ag)
-			openRequests.put(dr, tickerId)
-			openTickers.put(tickerId, dr)
-			clientSocket.reqMktData(tickerId, dr, "", false)
+		openRequests.put(dr, tickerId)
+		openTickers.put(tickerId, dr)
+		clientSocket.reqMktData(tickerId, dr, "", false)
 		
-			subscribeLock.release
-			return tickerId
-		}
+		return tickerId
 	}
 	
-	def unsubscribe(ag: ActorGroup, id: Int) {
-		subscribeLock.acquire
-		dataReceivers.get(id) foreach { curRecs => 
-			curRecs --= ag
-			if(curRecs.isEmpty) {
-				clientSocket.cancelMktData(id)
-				openTickers.remove(id) foreach (openRequests.remove(_))
-				dataReceivers.remove(id)
-			}
-		}
-		subscribeLock.release
-	}
+	def subscribe(dr: DataRequest): Int = 
+		openRequests getOrElse(dr, subscribeNew(dr))
 	
+	def unsubscribe(id: Int) = 
+		openTickers.remove(id) flatMap (dr => openRequests.remove(dr)) foreach (id => clientSocket.cancelMktData(id))
 
-		
-	def sendMessage(message: MarketDataType) {
-		dataReceivers.get(message.id) foreach (_ ! message)
-	}
-	
-	def sendMessage(message: OrderDataType) {
-		orderReceivers.get(message.id) foreach (_ ! message)
-	}
-	
-	def placeOrder(ag: ActorGroup, m: OrderRequest): Int = {
-		orderIdLock.acquire
+
+	// order logic
+	def placeOrder(or: OrderRequest): Int = {
 		val orderId = curOrderId; curOrderId += 1
-		orderIdLock.release
-		
-		orderReceivers.put(orderId, ag) 
-		clientSocket.placeOrder(orderId, m, m)
+		clientSocket.placeOrder(orderId, or, or)
 		return orderId
 	}
 	
@@ -138,8 +94,9 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		clientSocket cancelOrder id
 	}
 	
+	def sendMessage = callback
 	
-	//EWrapperImpl
+	// EWrapperImpl
 	def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int) {
 		val now = new DateTime()
 		field match {
@@ -182,9 +139,7 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		status match {
 			case "Submitted" => sendMessage(OrderStatus(orderId, filled, avgFillPrice))
 			case "Filled"    => sendMessage(OrderFilled(orderId, avgFillPrice))
-								orderReceivers.remove(orderId)
 			case "Cancelled" => sendMessage(OrderCancelled(orderId, filled, avgFillPrice))
-								orderReceivers.remove(orderId)
 			case _ 			 => logger.info(s"unsuppored order status: $status")
 		}
 		

@@ -1,4 +1,4 @@
-package thc.sandbox.marketmanager.ib
+package thc.sandbox.marketmanager.data.ib
 
 import com.ib.client.Contract
 import com.ib.client.Order

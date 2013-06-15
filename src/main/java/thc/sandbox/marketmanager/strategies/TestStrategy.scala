@@ -1,24 +1,13 @@
 package thc.sandbox.marketmanager.strategies
 
 import thc.sandbox.slf4s.Logger
-import akka.actor.Props
-import akka.actor.ActorRef
-import akka.actor.ActorSystem
-import thc.sandbox.marketmanager.data.MarketDataType
-import thc.sandbox.marketmanager.data.OrderDataType
 import thc.sandbox.util.MovingAverage
 import thc.sandbox.marketmanager.data.LastPrice
 import thc.sandbox.marketmanager.data.LastSize
+import thc.sandbox.marketmanager.data.OrderDataType
+import thc.sandbox.marketmanager.data.MarketDataType
 
-object TestStrategy extends StrategyCreator {
-	
-	def create(ar: ActorRef, symbol: String, money: Double)(implicit as: ActorSystem): ActorRef = {
-		as.actorOf(Props(creator=new TestStrategy(ar, symbol, money)), symbol)
-	}
-	
-}
-
-class TestStrategy(val manager: ActorRef, symbol: String, var money: Double) extends Strategy with Logger {
+class TestStrategy(symbol: String, var money: Double) extends Strategy with Logger {
 	
 	val averageVolume = new MovingAverage[Double](100)
 	val STaveragePrice = new MovingAverage[Double](10)
