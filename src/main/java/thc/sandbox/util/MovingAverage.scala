@@ -2,7 +2,7 @@ package thc.sandbox.util
 
 import scala.collection._
 
-class MovingAverage[T : Fractional](window: Int) {
+class SimpleMovingAverage[T : Fractional](window: Int) {
 
 	private val data: mutable.Queue[T] = new mutable.Queue[T]
 	

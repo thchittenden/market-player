@@ -1,14 +1,11 @@
 package thc.sandbox.marketmanager.ib
 
 import java.util.concurrent.ConcurrentHashMap
-
 import scala.collection.JavaConversions.mapAsScalaConcurrentMap
 import scala.collection.concurrent
 import scala.collection.mutable
 import scala.concurrent.Lock
-
 import org.joda.time.DateTime
-
 import com.ib.client.CommissionReport
 import com.ib.client.Contract
 import com.ib.client.ContractDetails
@@ -18,7 +15,6 @@ import com.ib.client.Execution
 import com.ib.client.Order
 import com.ib.client.OrderState
 import com.ib.client.UnderComp
-
 import TypeConverters.dataRequestAsContract
 import TypeConverters.orderRequestAsContract
 import TypeConverters.orderRequestAsOrder
@@ -38,6 +34,7 @@ import thc.sandbox.marketmanager.data.OrderRequest
 import thc.sandbox.marketmanager.data.OrderStatus
 import thc.sandbox.slf4s.Logger
 import thc.sandbox.util.ActorGroup
+import thc.sandbox.marketmanager.data.ClosingPrice
 
 class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		
@@ -125,9 +122,7 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 	}
 	
 	def placeOrder(ag: ActorGroup, m: OrderRequest): Int = {
-		orderIdLock.acquire
 		val orderId = curOrderId; curOrderId += 1
-		orderIdLock.release
 		
 		orderReceivers.put(orderId, ag) 
 		clientSocket.placeOrder(orderId, m, m)
@@ -143,9 +138,10 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 	def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int) {
 		val now = new DateTime()
 		field match {
-			case 1 => sendMessage( BidPrice(tickerId, price, now))
-			case 2 => sendMessage( AskPrice(tickerId, price, now))
-			case 4 => sendMessage(LastPrice(tickerId, price, now))
+			case 1 => sendMessage(	  BidPrice(tickerId, price, now))
+			case 2 => sendMessage( 	  AskPrice(tickerId, price, now))
+			case 4 => sendMessage(	 LastPrice(tickerId, price, now))
+			case 9 => sendMessage(ClosingPrice(tickerId, price, now))
 			case _ => logger.debug(s"unsupported operation: tickPrice($tickerId, $field, $price, $canAutoExecute)")
 		}
 	}
@@ -179,11 +175,12 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		avgFillPrice: Double, permId: Int, parentId: Int, lastFillPrice: Double,
 		clientId: Int, whyHeld: String) {
 			
+		val now = new DateTime()
 		status match {
-			case "Submitted" => sendMessage(OrderStatus(orderId, filled, avgFillPrice))
-			case "Filled"    => sendMessage(OrderFilled(orderId, avgFillPrice))
+			case "Submitted" => sendMessage(OrderStatus(orderId, filled, avgFillPrice, now))
+			case "Filled"    => sendMessage(OrderFilled(orderId, filled, avgFillPrice, now))
 								orderReceivers.remove(orderId)
-			case "Cancelled" => sendMessage(OrderCancelled(orderId, filled, avgFillPrice))
+			case "Cancelled" => sendMessage(OrderCancelled(orderId, filled, avgFillPrice, now))
 								orderReceivers.remove(orderId)
 			case _ 			 => logger.info(s"unsuppored order status: $status")
 		}

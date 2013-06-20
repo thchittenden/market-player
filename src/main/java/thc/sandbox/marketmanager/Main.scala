@@ -7,6 +7,7 @@ import akka.actor.ActorRef
 import thc.sandbox.slf4s.Logger
 import akka.actor.ActorSystem
 import thc.sandbox.marketmanager.dummy.DummyMarketConnection
+import thc.sandbox.marketmanager.strategies.ScalpingStrategy
 
 object Main extends Logger {
 	
@@ -17,9 +18,9 @@ object Main extends Logger {
 		val connection = getIBConnection()
 		
 		val mm = new MarketManager(connection, 1000.00) with Visualizer
-		mm.addStrategy(TestStrategy, "TNA", 1000.00, false)
-		mm.addStrategy(TestStrategy, "GOOG", 1000.00, false)
-		mm.addStrategy(TestStrategy, "AAPL", 1000.00, false)
+		mm.addStrategy(ScalpingStrategy, "TNA", 5000.00, false)
+//		mm.addStrategy(TestStrategy, "GOOG", 1000.00, false)
+//		mm.addStrategy(TestStrategy, "AAPL", 1000.00, false)
 		
 	}
 	

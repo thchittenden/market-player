@@ -31,43 +31,58 @@ import javax.swing.BoxLayout
 import javax.swing.JPanel
 import thc.sandbox.marketmanager.data.AskPrice
 import thc.sandbox.marketmanager.data.BidPrice
+import thc.sandbox.marketmanager.data.OrderFilled
+import info.monitorenter.gui.chart.IPointPainter
+import info.monitorenter.gui.chart.pointpainters.PointPainterDisc
+import thc.sandbox.slf4s.Logger
 
 trait Visualizer extends MarketManager {
 
 	implicit val as: ActorSystem
-	val vizActor: ActorRef = as.actorOf(Props(new VisualizerActor(subscriptions)))
+	val vizActor: ActorRef = as.actorOf(Props(creator=new VisualizerActor(orderIdToStock, tickerIdToStock)))
 	
 	abstract override def subscribe(ag: ActorGroup, dr: DataRequest) {
 		ag.add(vizActor)
 		super.subscribe(ag, dr)
 	}
 	
-	abstract override def order(ag: ActorGroup, or: OrderRequest) {
+	abstract override def order(ag: ActorGroup, or: OrderRequest): Int = {
 		ag.add(vizActor)
-		super.order(ag, or)
+		return super.order(ag, or)
 	}
 	
 }
 
-class VisualizerActor(subscriptions: Map[Int, DataRequest]) extends Actor {
+class VisualizerActor(val orderIdToStock: Map[Int, String],
+					  val tickerIdToStock: Map[Int, String]) extends Actor with Logger {
 		
 	//last, ask, bid
-	val traces: mutable.Map[Int, (ITrace2D, ITrace2D, ITrace2D)] = mutable.HashMap.empty
+	val traces: mutable.Map[String, (ITrace2D, ITrace2D, ITrace2D, ITrace2D)] = mutable.HashMap.empty
 
 	def addLast(id: Int, x: Double, y: Double) {
-		(traces getOrElseUpdate(id, createNewTrace(id)))._1.addPoint(x, y)
+		logger.debug(s"adding last price point: ($x, $y)")
+		(traces getOrElseUpdate(tickerIdToStock(id), createNewTrace(id)))._1.addPoint(x, y)
+
 	}
 	def addAsk(id: Int, x: Double, y: Double) {
-		(traces getOrElseUpdate(id, createNewTrace(id)))._2.addPoint(x, y)
+		logger.debug(s"adding ask price point: ($x, $y)")
+		(traces getOrElseUpdate(tickerIdToStock(id), createNewTrace(id)))._2.addPoint(x, y)
 	}
 	def addBid(id: Int, x: Double, y: Double) {
-		(traces getOrElseUpdate(id, createNewTrace(id)))._3.addPoint(x, y)
+		logger.debug(s"adding bid price point: ($x, $y)")
+		(traces getOrElseUpdate(tickerIdToStock(id), createNewTrace(id)))._3.addPoint(x, y)
+	}
+	def addOrder(id: Int, x: Double, y: Double) {
+		logger.error(s"adding order point: ($x, $y)")
+		traces(orderIdToStock(id))._4.setVisible(true)
+		traces(orderIdToStock(id))._4.addPoint(x, y)
 	}
 	
 	def receive = {
 		case LastPrice(id: Int, price: Double, time: DateTime) => addLast(id, time.getMillis(), price)
 		case AskPrice(id: Int, price: Double, time: DateTime)  => addAsk(id, time.getMillis(), price)
 		case BidPrice(id: Int, price: Double, time: DateTime)  => addBid(id, time.getMillis(), price)
+		case OrderFilled(id: Int, filled: Int, avgFillPrice: Double, time: DateTime) => addOrder(id, time.getMillis(), avgFillPrice)
 	}
 	
 	
@@ -78,49 +93,61 @@ class VisualizerActor(subscriptions: Map[Int, DataRequest]) extends Actor {
 	val frame = new JFrame("Prices")
 	frame.setSize(600, 400)
 	frame.setContentPane(panel);
-	frame.addWindowListener(new WindowAdapter() {
+	frame.addWindowListener(new WindowAdapter {
 		override def windowClosing(e: WindowEvent) = System.exit(0)
 	})
 
-	def createNewTrace(id: Int): (ITrace2D, ITrace2D, ITrace2D) = {
-		//TODO make window display range valid for ALL traces
+	def createNewTrace(id: Int): (ITrace2D, ITrace2D, ITrace2D, ITrace2D) = {
+		val chart = new Chart2D();
+
 		val last = new Trace2DLtd(200)
+		chart.addTrace(last);
 		last.setColor(Color.green)
-		last.setPhysicalUnits("Time", "Dollars ($)")
-		subscriptions.get(id) foreach (dr => last.setName(dr.symbol + " last"))
+		tickerIdToStock.get(id) foreach (s => last.setName(s + " last"))
 		
 		val ask = new Trace2DLtd(200)
+		chart.addTrace(ask);
 		ask.setColor(Color.red)
-		ask.setPhysicalUnits("Time", "Dollars ($)")
-		subscriptions.get(id) foreach (dr => ask.setName(dr.symbol + " ask"))
+		tickerIdToStock.get(id) foreach (s => ask.setName(s + " ask"))
 		
 		val bid = new Trace2DLtd(200)
-		bid.setColor(Color.black)
-		bid.setPhysicalUnits("Time", "Dollars ($)")
-		subscriptions.get(id) foreach (dr => bid.setName(dr.symbol + " bid"))
-
-		val chart = new Chart2D();
-		chart.addTrace(last);
-		chart.addTrace(ask);
 		chart.addTrace(bid);
+		bid.setColor(Color.black)
+		tickerIdToStock.get(id) foreach (s => bid.setName(s + " bid"))
+		
+		val orders = new Trace2DLtd(100)
+		chart.addTrace(orders);
+		orders.setColor(Color.blue)
+		orders.setPointHighlighter(new PointPainterDisc(5))
+		orders.setVisible(false)
+		tickerIdToStock.get(id) foreach (s => orders.setName(s + " orders"))
+		
 		chart.setUseAntialiasing(true)
 		chart.getAxisX().setPaintGrid(true)
 		chart.getAxisX().getAxisTitle().setTitle("Seconds Ago")
 		chart.getAxisX().setFormatter(new LabelFormatterTimeAgo())
+		chart.getAxisX().setRangePolicy(new RangePolicyFixed(180*1000))
 
 		chart.getAxisY().setPaintGrid(true)
-		chart.getAxisY().getAxisTitle().setTitle("Dollars".reverse); //dont ask
-		chart.getAxisY().setRangePolicy(new RangePolicyPadded(0.05));
+		chart.getAxisY().getAxisTitle().setTitle("Dollars".reverse) //dont ask
+		chart.getAxisY().setRangePolicy(new RangePolicyPadded(0.05))
 		
 		panel.add("test", chart);
 		frame.pack()
 		frame.setSize(600, panel.getComponentCount()*200)
 		frame.setVisible(true);
-		(last, ask, bid)
+		(last, ask, bid, orders)
 	}
 	
 
 	
+}
+
+class RangePolicyFixed(val frame: Double) extends ARangePolicy {
+	
+	def getMax(chartmin: Double, chartmax: Double): Double = chartmax
+	
+	def getMin(chartmin: Double, chartmax: Double): Double = chartmax - frame
 }
 
 class RangePolicyPadded(val padding: Double) extends ARangePolicy {
@@ -140,8 +167,8 @@ class LabelFormatterTimeAgo extends ALabelFormatter {
 	var lastFormatted: Double = 0
 	
 	def getNextEvenValue(point: Double, ceiling: Boolean): Double = {
-		val p: Double = point - (point % 1000)
-		if(ceiling)	p + 1000
+		val p: Double = point - (point % 10000)
+		if(ceiling)	p + 10000
 		else		p
 				
 	}

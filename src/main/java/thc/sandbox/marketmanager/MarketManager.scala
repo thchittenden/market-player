@@ -13,6 +13,8 @@ import thc.sandbox.marketmanager.strategies.Strategy
 import thc.sandbox.marketmanager.strategies.StrategyCreator
 import thc.sandbox.marketmanager.data.DataRequest
 import thc.sandbox.util.ActorGroup
+import thc.sandbox.marketmanager.data.OrderStatus
+import akka.pattern._
 
 class MarketManager(val conn: MarketConnection, var money: Double)(implicit val as: ActorSystem) {
 
@@ -20,10 +22,12 @@ class MarketManager(val conn: MarketConnection, var money: Double)(implicit val 
 	val strategyMoney: mutable.Map[ActorRef, Double] = mutable.HashMap.empty
 	val subscriptions: mutable.Map[Int, DataRequest] = mutable.HashMap.empty
 	
+	val tickerIdToStock: mutable.Map[Int, String] = mutable.HashMap.empty
+	val orderIdToStock: mutable.Map[Int, String] = mutable.HashMap.empty
 	
 	val messageProcessor = actor(new Act {
 		become {
-			case or: OrderRequest => order(ActorGroup(sender), or)
+			case or: OrderRequest => sender ! order(ActorGroup(sender), or)
 		}
 	})
 	
@@ -37,12 +41,16 @@ class MarketManager(val conn: MarketConnection, var money: Double)(implicit val 
 	}
 	
 	def subscribe(actors: ActorGroup, dr: DataRequest) {
-		subscriptions += (conn.subscribe(actors, dr) -> dr)
+		val tickerId = conn.subscribe(actors, dr)
+		tickerIdToStock += tickerId -> dr.symbol
+		subscriptions += tickerId -> dr
 	}
 		
-	def order(actors: ActorGroup, or: OrderRequest) {
+	def order(actors: ActorGroup, or: OrderRequest): Int = {
 		//validate(or)
-		conn.placeOrder(actors, or)
+		val id = conn.placeOrder(actors, or)
+		orderIdToStock += id -> or.symbol
+		return id
 	}
 	
 }
