@@ -10,10 +10,10 @@ import thc.sandbox.marketmanager.data.LastPrice
 import org.joda.time.DateTime
 
 
-class DummyMarketConnection extends MarketConnection {
-	
-	var curTickerId = 0;
-	
-	
-	
-}
+//class DummyMarketConnection extends MarketConnection {
+//	
+//	var curTickerId = 0;
+//	
+//	
+//	
+//}

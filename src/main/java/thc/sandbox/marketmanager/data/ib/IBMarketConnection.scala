@@ -1,9 +1,10 @@
 package thc.sandbox.marketmanager.data.ib
 
-import scala.collection.concurrent
 import scala.collection.mutable
 import scala.concurrent.Lock
+
 import org.joda.time.DateTime
+
 import com.ib.client.CommissionReport
 import com.ib.client.Contract
 import com.ib.client.ContractDetails
@@ -13,9 +14,11 @@ import com.ib.client.Execution
 import com.ib.client.Order
 import com.ib.client.OrderState
 import com.ib.client.UnderComp
+
 import TypeConverters.dataRequestAsContract
 import TypeConverters.orderRequestAsContract
 import TypeConverters.orderRequestAsOrder
+import thc.sandbox.marketmanager.MarketConnection
 import thc.sandbox.marketmanager.data.AskPrice
 import thc.sandbox.marketmanager.data.AskSize
 import thc.sandbox.marketmanager.data.BidPrice
@@ -23,24 +26,17 @@ import thc.sandbox.marketmanager.data.BidSize
 import thc.sandbox.marketmanager.data.DataRequest
 import thc.sandbox.marketmanager.data.LastPrice
 import thc.sandbox.marketmanager.data.LastSize
-import thc.sandbox.marketmanager.MarketConnection
-import thc.sandbox.marketmanager.data.MarketDataType
 import thc.sandbox.marketmanager.data.OrderCancelled
-import thc.sandbox.marketmanager.data.OrderDataType
 import thc.sandbox.marketmanager.data.OrderFilled
 import thc.sandbox.marketmanager.data.OrderRequest
 import thc.sandbox.marketmanager.data.OrderStatus
-import thc.sandbox.slf4s.Logger
-import thc.sandbox.util.ActorGroup
-import com.lmax.disruptor.RingBuffer
-import thc.sandbox.marketmanager.data.RequestTypeContainer
-import thc.sandbox.marketmanager.data.ReceiveTypeContainer
 import thc.sandbox.marketmanager.data.ReceiveType
+import thc.sandbox.slf4s.Logger
 
 class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 
-	var callback = (x: ReceiveType) => ();
-	def registerCallback(cb: (ReceiveType => Unit)) {
+	var callback = (id: Int, x: ReceiveType) => logger.error(s"received data without callback! $x")
+	def registerCallback(cb: (Int, ReceiveType) => Unit) {
 		callback = cb;
 	}
 	
@@ -54,17 +50,6 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 	val openRequests: mutable.Map[DataRequest, Int] = mutable.HashMap.empty
 	val openTickers:  mutable.Map[Int, DataRequest] = mutable.HashMap.empty
 
-	def connect(host: String, port: Int, clientId: Int) {
-		logger.info(s"connecting to $host on port $port with clientId $clientId")
-		clientSocket.eConnect(host, port, clientId)
-	}
-	
-	def isConnected(): Boolean = clientSocket.isConnected
-	def disconnect() {
-		logger.info("disconnecting...")
-		clientSocket.eDisconnect
-	}
-	
 	//subscription logic
 	private def subscribeNew(dr: DataRequest): Int = {
 		val tickerId = curTickerId; curTickerId += 1;
@@ -94,15 +79,26 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		clientSocket cancelOrder id
 	}
 	
-	def sendMessage = callback
+	def connect(host: String, port: Int, clientId: Int) {
+		logger.info(s"connecting to $host on port $port with clientId $clientId")
+		clientSocket.eConnect(host, port, clientId)
+	}
+	
+	def isConnected(): Boolean = clientSocket.isConnected
+	def disconnect() {
+		logger.info("disconnecting...")
+		clientSocket.eDisconnect
+	}
 	
 	// EWrapperImpl
+	def sendMessage = callback
+	
 	def tickPrice(tickerId: Int, field: Int, price: Double, canAutoExecute: Int) {
 		val now = new DateTime()
 		field match {
-			case 1 => sendMessage( BidPrice(tickerId, price, now))
-			case 2 => sendMessage( AskPrice(tickerId, price, now))
-			case 4 => sendMessage(LastPrice(tickerId, price, now))
+			case 1 => sendMessage(tickerId,  BidPrice(tickerId, price, now))
+			case 2 => sendMessage(tickerId,  AskPrice(tickerId, price, now))
+			case 4 => sendMessage(tickerId, LastPrice(tickerId, price, now))
 			case _ => logger.debug(s"unsupported operation: tickPrice($tickerId, $field, $price, $canAutoExecute)")
 		}
 	}
@@ -110,9 +106,9 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 	def tickSize(tickerId: Int, field: Int, size: Int) {
 		val now = new DateTime()
 		field match {
-			case 0 => sendMessage( BidSize(tickerId, size, now))
-			case 3 => sendMessage( AskSize(tickerId, size, now))
-			case 5 => sendMessage(LastSize(tickerId, size, now))
+			case 0 => sendMessage(tickerId,  BidSize(tickerId, size, now))
+			case 3 => sendMessage(tickerId,  AskSize(tickerId, size, now))
+			case 5 => sendMessage(tickerId, LastSize(tickerId, size, now))
 			case _ => logger.info(s"unsupported operation: tickSize($tickerId, $field, $size)")
 		}
 	}
@@ -137,9 +133,9 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		clientId: Int, whyHeld: String) {
 			
 		status match {
-			case "Submitted" => sendMessage(OrderStatus(orderId, filled, avgFillPrice))
-			case "Filled"    => sendMessage(OrderFilled(orderId, avgFillPrice))
-			case "Cancelled" => sendMessage(OrderCancelled(orderId, filled, avgFillPrice))
+			case "Submitted" => sendMessage(orderId, OrderStatus(orderId, filled, avgFillPrice))
+			case "Filled"    => sendMessage(orderId, OrderFilled(orderId, avgFillPrice))
+			case "Cancelled" => sendMessage(orderId, OrderCancelled(orderId, filled, avgFillPrice))
 			case _ 			 => logger.info(s"unsuppored order status: $status")
 		}
 		

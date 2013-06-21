@@ -1,9 +1,9 @@
 package thc.sandbox.marketmanager
 
-import thc.sandbox.marketmanager.MarketConnection
-import thc.sandbox.marketmanager.data.dummy.DummyMarketConnection
 import thc.sandbox.marketmanager.data.ib.IBMarketConnection
 import thc.sandbox.slf4s.Logger
+import thc.sandbox.marketmanager.strategies.TestStrategyBuilder
+import thc.sandbox.marketmanager.visualizer.SwingVisualizer
 
 object Main extends Logger {
 	
@@ -13,8 +13,17 @@ object Main extends Logger {
 		
 		val connection = getIBConnection()
 		
-//		val mm = new MarketManager(connection, 1000.00) with Visualizer
-//		mm.addStrategy(TestStrategy, "TNA", 1000.00, false)
+		val mm = new MarketManager(connection) with SwingVisualizer
+		
+		val tsb = new TestStrategyBuilder
+		tsb.moneyOption = Some(1000.00)
+		tsb.symbolOption = Some("TNA")
+		mm.addStrategy(tsb)
+		tsb.symbolOption = Some("GOOG")
+		mm.addStrategy(tsb)
+		
+		mm.start()
+		
 //		mm.addStrategy(TestStrategy, "GOOG", 1000.00, false)
 //		mm.addStrategy(TestStrategy, "AAPL", 1000.00, false)
 		
@@ -28,9 +37,10 @@ object Main extends Logger {
 			logger.error("not connected! aborting...")
 			throw new IllegalStateException()
 		}
+		
 		connection
 	}
 	
-	def getDummyConnection: MarketConnection = new DummyMarketConnection()
+//	def getDummyConnection: MarketConnection = new DummyMarketConnection()
 
 }
