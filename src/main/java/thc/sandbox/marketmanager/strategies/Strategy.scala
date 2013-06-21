@@ -1,28 +1,54 @@
 package thc.sandbox.marketmanager.strategies
 
-import akka.actor.Actor
-import akka.actor.ActorRef
-import akka.actor.ActorSystem
-import akka.pattern.AskSupport
-import thc.sandbox.marketmanager.data.MarketDataType
-import thc.sandbox.marketmanager.data.OrderDataType
+import com.lmax.disruptor.EventHandler
+import com.lmax.disruptor.RingBuffer
+import com.lmax.disruptor.dsl.Disruptor
+import thc.sandbox.marketmanager.data.Container
+import thc.sandbox.marketmanager.data.OrderRequest
+import thc.sandbox.marketmanager.data.DataRequest
+import java.util.concurrent.Executor
+import scala.concurrent.Future
+import collection._
 
-//strategy creator trait to hold Strategy factory
-trait StrategyCreator {
-	def create(od: ActorRef, symbol: String, money: Double)(implicit as: ActorSystem): ActorRef
+abstract class StrategyBuilder[T <: Strategy] {
+	var orderQueueOption: Option[Disruptor[Container]] = None
+	var dataQueueOption: Option[Disruptor[Container]] = None
+	
+	def construct(implicit executor: Executor): T 
 }
 
-abstract class Strategy extends Actor {
+abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[Container])(implicit executor: Executor) {
 	
-	val manager: ActorRef
-	var money: Double
-	
-	def processOrderDataType(odt: OrderDataType): Unit
-	def processMarketDataType(mdt: MarketDataType): Unit
-	
-	def receive = {
-		case odt: OrderDataType => processOrderDataType(odt)
-		case mdt: MarketDataType => processMarketDataType(mdt)
+	//to be implemented by strategies
+	val title: String
+	val dataRequests: Seq[DataRequest]
+	protected def handleData(data: Any): Unit
+
+	val auditQueue: Disruptor[Container] = new Disruptor[Container](Container, 256, executor)
+	val auditQueueRingBuffer = auditQueue.getRingBuffer()
+	def start() {
+		auditQueue.start()
+	}
+		
+	var ids: Set[Int] = immutable.BitSet.empty
+	private val dataQueueHandler = new EventHandler[Container](){
+		def onEvent(c: Container, pos: Long, endOfBatch: Boolean) {
+			c.id foreach (id => if(!ids.contains(id)) return)
+			
+			val id = auditQueueRingBuffer.next()
+			auditQueueRingBuffer.get(id).value = c.value
+			auditQueueRingBuffer.publish(id)
+			handleData(c.value)
+		}
+	}
+	dataQueue.handleEventsWith(dataQueueHandler)
+
+	private val orderRingBuffer: RingBuffer[Container] = orderQueue.getRingBuffer();
+	protected def placeOrder(or: OrderRequest) {
+		if(orderQueue eq null) throw new IllegalStateException("no order queue registerd!")
+		val id = orderRingBuffer.next()
+		orderRingBuffer.get(id).value = or
+		orderRingBuffer.publish(id)
 	}
 	
 }

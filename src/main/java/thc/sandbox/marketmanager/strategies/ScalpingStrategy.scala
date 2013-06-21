@@ -1,43 +1,48 @@
 package thc.sandbox.marketmanager.strategies
 
-import akka.actor.ActorRef
-import akka.actor.ActorSystem
-import akka.pattern.ask
-import akka.actor.Props
-import thc.sandbox.marketmanager.data.MarketDataType
-import thc.sandbox.marketmanager.data.OrderDataType
+import java.util.concurrent.Executor
+import scala.collection.mutable
+import com.lmax.disruptor.dsl.Disruptor
+import thc.sandbox.marketmanager.data.AskPrice
+import thc.sandbox.marketmanager.data.BidPrice
+import thc.sandbox.marketmanager.data.ClosingPrice
+import thc.sandbox.marketmanager.data.Container
+import thc.sandbox.marketmanager.data.LastPrice
+import thc.sandbox.marketmanager.data.LastSize
+import thc.sandbox.marketmanager.data.SimpleStockLimitBuyOrder
+import thc.sandbox.marketmanager.data.SimpleStockLimitSellOrder
 import thc.sandbox.slf4s.Logger
 import thc.sandbox.util.SimpleMovingAverage
 import thc.sandbox.util.Stochastic
-import thc.sandbox.marketmanager.data.LastPrice
-import thc.sandbox.marketmanager.data.LastSize
-import thc.sandbox.marketmanager.data.ClosingPrice
-import thc.sandbox.marketmanager.data.BidPrice
-import thc.sandbox.marketmanager.data.AskPrice
-import thc.sandbox.marketmanager.data.OrderRequest
-import thc.sandbox.marketmanager.data.SimpleStockMarketBuyOrder
-import thc.sandbox.marketmanager.data.SimpleStockMarketSellOrder
-import thc.sandbox.marketmanager.data.OrderFilled
-import scala.concurrent.ExecutionContext.Implicits.global
-import collection._
-import akka.util.Timeout
-import scala.concurrent.Future
-import scala.util.Success
-import scala.util.Failure
-import thc.sandbox.marketmanager.data.SimpleStockLimitSellOrder
 import thc.sandbox.marketmanager.data.SimpleStockLimitBuyOrder
+import thc.sandbox.marketmanager.data.SimpleRTStockRequest
 
-
-object ScalpingStrategy extends StrategyCreator {
+class ScalpingStrategyBuilder extends StrategyBuilder[ScalpingStrategy] {
+	var moneyOption: Option[Double] = None
+	var symbolOption: Option[String] = None
 	
-	def create(ar: ActorRef, symbol: String, money: Double)(implicit as: ActorSystem): ActorRef = {
-		as.actorOf(Props(creator=new ScalpingStrategy(ar, symbol, money)), symbol)
+	private def incompleteException: Exception = {
+		val errorMessage = new StringBuilder().append("invalid builder:")
+		errorMessage.append("\n\tMoney: ").append(moneyOption)
+		errorMessage.append("\n\tSymbol: ").append(symbolOption)
+		errorMessage.append("\n\tOrderQueue: ").append(orderQueueOption)
+		errorMessage.append("\n\tDataQueue: ").append(dataQueueOption)
+		new IllegalStateException(errorMessage.toString)
 	}
 	
+	def construct(implicit executor: Executor) =
+		(for {
+			money <- moneyOption
+			symbol <- symbolOption
+			orderQueue <- orderQueueOption
+			dataQueue <- dataQueueOption
+		} yield new ScalpingStrategy(symbol, money, orderQueue, dataQueue)) getOrElse(throw incompleteException)
 }
-class ScalpingStrategy(val manager: ActorRef, val symbol: String, var money: Double) extends Strategy with Logger {
+
+class ScalpingStrategy(symbol: String, var money: Double, oq: Disruptor[Container], dq: Disruptor[Container])(implicit executor: Executor) extends Strategy(oq, dq) with Logger {
 	
-	implicit val timeout: Timeout = 10000
+	val title = s"Scalping Strategy ($symbol)"
+	val dataRequests = Seq(SimpleRTStockRequest(symbol))
 	
 	var quantityHeld: Int = 0
 	val openOrders: mutable.Map[Int, Int] = mutable.Map.empty
@@ -60,20 +65,12 @@ class ScalpingStrategy(val manager: ActorRef, val symbol: String, var money: Dou
 			stochasticBelow20 = false
 			if(money > orderSize) {
 				val quantity: Int = (orderSize / lastAsk).toInt
-				val future = manager ? SimpleStockLimitBuyOrder(symbol, quantity, lastBid)
-				future onComplete {
-					case Success(orderId: Int) => openOrders.put(orderId, quantity)
-					case Failure(t) => logger.error(s"could not commit buy order: $t")
-				}
+				val order = SimpleStockLimitBuyOrder(symbol, quantity, lastBid)
 			}
 		}
 		if(stochasticAbove80 && stochastic.percentD < 80) {
 			if(quantityHeld > 0) {
-				val future = manager ? SimpleStockLimitSellOrder(symbol, quantityHeld, lastBid)
-				future onComplete {
-					case Success(orderId: Int) => openOrders.put(orderId, -quantityHeld)
-					case Failure(t) => logger.error(s"could not commit sell order: $t")
-				}
+				val order = SimpleStockLimitSellOrder(symbol, quantityHeld, lastBid)
 			}
 		}
 		if(stochastic.percentD > 80) stochasticAbove80 = true
@@ -82,9 +79,9 @@ class ScalpingStrategy(val manager: ActorRef, val symbol: String, var money: Dou
 	}
 
 	
-	def processMarketDataType(mdt: MarketDataType) {
-		logger.info(s"received market data: $mdt")
-		mdt match {
+	def handleData(data: Any) {
+		logger.info(s"received market data: $data")
+		data match {
 			case LastPrice(_, price, _) => 
 				lastPrice = price
 				STaveragePrice.add(price)
@@ -100,14 +97,6 @@ class ScalpingStrategy(val manager: ActorRef, val symbol: String, var money: Dou
 			case _ =>
 		}
 		processData()
-	}
-	
-	def processOrderDataType(odt: OrderDataType) {
-		odt match {
-			case OrderFilled(orderId, numFilled, avgFillPrice, now) => 
-				money += openOrders(orderId) * avgFillPrice
-				openOrders.remove(orderId)
-		}
 	}
 	
 }

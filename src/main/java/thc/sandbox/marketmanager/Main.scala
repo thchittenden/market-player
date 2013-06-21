@@ -1,24 +1,29 @@
 package thc.sandbox.marketmanager
 
-import thc.sandbox.marketmanager.ib.IBMarketConnection
-import thc.sandbox.marketmanager.data.MarketConnection
-import thc.sandbox.marketmanager.strategies.TestStrategy
-import akka.actor.ActorRef
+import thc.sandbox.marketmanager.data.ib.IBMarketConnection
 import thc.sandbox.slf4s.Logger
-import akka.actor.ActorSystem
-import thc.sandbox.marketmanager.dummy.DummyMarketConnection
-import thc.sandbox.marketmanager.strategies.ScalpingStrategy
+import thc.sandbox.marketmanager.strategies.TestStrategyBuilder
+import thc.sandbox.marketmanager.visualizer.SwingVisualizer
 
 object Main extends Logger {
 	
 	def main(args: Array[String]) {
 		
-		implicit val as: ActorSystem = ActorSystem("MarketManager")
+//		implicit val as: ActorSystem = ActorSystem("MarketManager")
 		
 		val connection = getIBConnection()
 		
-		val mm = new MarketManager(connection, 1000.00) with Visualizer
-		mm.addStrategy(ScalpingStrategy, "TNA", 5000.00, false)
+		val mm = new MarketManager(connection) with SwingVisualizer
+		
+		val tsb = new TestStrategyBuilder
+		tsb.moneyOption = Some(1000.00)
+		tsb.symbolOption = Some("TNA")
+		mm.addStrategy(tsb)
+		tsb.symbolOption = Some("GOOG")
+		mm.addStrategy(tsb)
+		
+		mm.start()
+		
 //		mm.addStrategy(TestStrategy, "GOOG", 1000.00, false)
 //		mm.addStrategy(TestStrategy, "AAPL", 1000.00, false)
 		
@@ -32,9 +37,10 @@ object Main extends Logger {
 			logger.error("not connected! aborting...")
 			throw new IllegalStateException()
 		}
+		
 		connection
 	}
 	
-	def getDummyConnection(implicit as: ActorSystem): MarketConnection = new DummyMarketConnection()
+//	def getDummyConnection: MarketConnection = new DummyMarketConnection()
 
 }
