@@ -4,20 +4,28 @@ import info.monitorenter.gui.chart.rangepolicies.ARangePolicy
 import info.monitorenter.gui.chart.labelformatters.ALabelFormatter
 import org.joda.time.DateTime
 
+class RangePolicyPadded(val paddinglo: Double, val paddinghi: Double) extends ARangePolicy {
+	def this(padding: Double) = this(padding, padding)
+	
+	def getMax(chartmin: Double, chartmax: Double): Double = chartmax + paddinghi
+	def getMin(chartmin: Double, chartmax: Double): Double = chartmin - paddinglo
+}
 
-class RangePolicyPadded(val padding: Double) extends ARangePolicy {
-	
-	def getMax(chartmin: Double, chartmax: Double): Double = chartmax + padding
-	
-	def getMin(chartmin: Double, chartmax: Double): Double = chartmin - padding
-	
+class RangePolicyFixedLookback(val frame: Double) extends ARangePolicy {
+	def getMax(chartmin: Double, chartmax: Double): Double = chartmax
+	def getMin(chartmin: Double, chartmax: Double): Double = chartmax - frame
+}
+
+class RangePolicyFixed(val low: Double, val hi: Double) extends ARangePolicy {
+	def getMax(chartmin: Double, chartmax: Double): Double = hi
+	def getMin(chartmin: Double, chartmax: Double): Double = low
 }
 
 class LabelFormatterTimeAgo extends ALabelFormatter {
 	
 	def now: Double = new DateTime().getMillis()
 	
-	val getMinimumValueShiftForChange: Double = 100
+	val getMinimumValueShiftForChange: Double = 1000
 	
 	var lastFormatted: Double = 0
 	

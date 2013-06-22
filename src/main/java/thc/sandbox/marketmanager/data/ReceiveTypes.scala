@@ -22,9 +22,9 @@ case class BidSize(id: Int, size: Int, time: DateTime) extends MarketDataType
 abstract sealed class OrderDataType extends ReceiveType {
 	val id: Int
 }
-case class OrderStatus(id: Int, filled: Int, avgFillPrice: Double) extends OrderDataType
-case class OrderFilled(id: Int, avgFillPrice: Double) extends OrderDataType
-case class OrderCancelled(id: Int, filled: Int, avgFillPrice: Double) extends OrderDataType
+case class OrderStatus(id: Int, filled: Int, avgFillPrice: Double, time: DateTime) extends OrderDataType
+case class OrderFilled(id: Int, filled: Int, avgFillPrice: Double, time: DateTime) extends OrderDataType
+case class OrderCancelled(id: Int, filled: Int, avgFillPrice: Double, time: DateTime) extends OrderDataType
 
 abstract sealed class CalculatedType extends ReceiveType
 case class Stochastic(value: Double, time: DateTime) extends CalculatedType

@@ -133,9 +133,9 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 			
 		val now = new DateTime()
 		status match {
-			case "Submitted" => sendMessage(orderId, OrderStatus(orderId, filled, avgFillPrice))
-			case "Filled"    => sendMessage(orderId, OrderFilled(orderId, avgFillPrice))
-			case "Cancelled" => sendMessage(orderId, OrderCancelled(orderId, filled, avgFillPrice))
+			case "Submitted" => sendMessage(orderId, OrderStatus(orderId, filled, avgFillPrice, now))
+			case "Filled"    => sendMessage(orderId, OrderFilled(orderId, filled, avgFillPrice, now))
+			case "Cancelled" => sendMessage(orderId, OrderCancelled(orderId, filled, avgFillPrice, now))
 			case _ 			 => logger.info(s"unsuppored order status: $status")
 		}
 		

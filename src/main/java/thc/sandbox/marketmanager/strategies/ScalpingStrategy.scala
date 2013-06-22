@@ -39,10 +39,11 @@ class ScalpingStrategyBuilder extends StrategyBuilder[ScalpingStrategy] {
 		} yield new ScalpingStrategy(symbol, money, orderQueue, dataQueue)) getOrElse(throw incompleteException)
 }
 
-class ScalpingStrategy(symbol: String, var money: Double, oq: Disruptor[Container], dq: Disruptor[Container])(implicit executor: Executor) extends Strategy(oq, dq) with Logger {
+class ScalpingStrategy(symbol: String, money: Double, oq: Disruptor[Container], dq: Disruptor[Container])(implicit executor: Executor) extends Strategy(oq, dq) with Logger {
 	
 	val title = s"Scalping Strategy ($symbol)"
 	val dataRequests = Seq(SimpleRTStockRequest(symbol))
+	var currentPosition = money
 	
 	var quantityHeld: Int = 0
 	val openOrders: mutable.Map[Int, Int] = mutable.Map.empty

@@ -3,15 +3,14 @@ package thc.sandbox.marketmanager
 import thc.sandbox.marketmanager.data.ib.IBMarketConnection
 import thc.sandbox.slf4s.Logger
 import thc.sandbox.marketmanager.strategies.TestStrategyBuilder
-import thc.sandbox.marketmanager.visualizer.SwingVisualizer
+import thc.sandbox.marketmanager.visualizer.swing.SwingVisualizer
+import thc.sandbox.marketmanager.data.dummy.DummyMarketConnection
 
 object Main extends Logger {
 	
 	def main(args: Array[String]) {
-		
-//		implicit val as: ActorSystem = ActorSystem("MarketManager")
-		
-		val connection = getIBConnection()
+				
+		val connection = getDummyConnection()
 		
 		val mm = new MarketManager(connection) with SwingVisualizer
 		
@@ -41,6 +40,6 @@ object Main extends Logger {
 		connection
 	}
 	
-//	def getDummyConnection: MarketConnection = new DummyMarketConnection()
+	def getDummyConnection(): MarketConnection = new DummyMarketConnection()
 
 }

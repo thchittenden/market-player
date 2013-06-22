@@ -22,6 +22,8 @@ class MarketManager(val conn: MarketConnection) extends Logger {
 	val marketDataRingBuffer = marketData.getRingBuffer()
 	
 	val strategies: mutable.Set[Strategy] = mutable.HashSet.empty
+	var initialPosition = 0.0
+	var currentPosition = 0.0
 	
 	//register connection callback
 	conn.registerCallback(onNewData)
@@ -37,7 +39,6 @@ class MarketManager(val conn: MarketConnection) extends Logger {
 		}
 	}
 	orderData.handleEventsWith(orderDataQueueHandler)
-
 	
 	def addStrategy[T <: Strategy](sb: StrategyBuilder[T]) {
 		sb.dataQueueOption = Some(marketData)
@@ -48,6 +49,8 @@ class MarketManager(val conn: MarketConnection) extends Logger {
 	
 	//callbacks for extensions
 	protected def onNewStrategy(s: Strategy) { 
+		currentPosition += s.currentPosition
+		initialPosition += s.currentPosition
 		s.ids = immutable.BitSet((for (dr <- s.dataRequests) yield conn.subscribe(dr)): _*)
 		strategies.add(s) 
 	}
@@ -60,6 +63,10 @@ class MarketManager(val conn: MarketConnection) extends Logger {
 		marketDataRingBuffer.get(id).value = data
 		marketDataRingBuffer.publish(id)
 	}
+	protected def onInvalidateCurrentPosition() {
+		currentPosition = strategies.foldLeft(0.00)(_ + _.currentPosition)
+	}
+	
 	def start() {
 		strategies foreach (_.start())
 		orderData.start()

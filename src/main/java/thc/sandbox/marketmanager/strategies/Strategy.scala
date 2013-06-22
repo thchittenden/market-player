@@ -22,6 +22,7 @@ abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[C
 	//to be implemented by strategies
 	val title: String
 	val dataRequests: Seq[DataRequest]
+	var currentPosition: Double
 	protected def handleData(data: Any): Unit
 
 	val auditQueue: Disruptor[Container] = new Disruptor[Container](Container, 256, executor)
@@ -33,12 +34,12 @@ abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[C
 	var ids: Set[Int] = immutable.BitSet.empty
 	private val dataQueueHandler = new EventHandler[Container](){
 		def onEvent(c: Container, pos: Long, endOfBatch: Boolean) {
-			c.id foreach (id => if(!ids.contains(id)) return)
+			//if we have an id and it doesn't match return
+			//TODO create separate ring buffer for every DR?
+			c.id foreach (id => if(!(ids contains id)) return)
 			
-			val id = auditQueueRingBuffer.next()
-			auditQueueRingBuffer.get(id).value = c.value
-			auditQueueRingBuffer.publish(id)
 			handleData(c.value)
+			publishAudit(c.value)
 		}
 	}
 	dataQueue.handleEventsWith(dataQueueHandler)
@@ -46,9 +47,17 @@ abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[C
 	private val orderRingBuffer: RingBuffer[Container] = orderQueue.getRingBuffer();
 	protected def placeOrder(or: OrderRequest) {
 		if(orderQueue eq null) throw new IllegalStateException("no order queue registerd!")
-		val id = orderRingBuffer.next()
-		orderRingBuffer.get(id).value = or
-		orderRingBuffer.publish(id)
+		val orderId = orderRingBuffer.next()
+		orderRingBuffer.get(orderId).value = or
+		orderRingBuffer.publish(orderId)
+		
+		publishAudit(or)
+	}
+	
+	protected def publishAudit(d: Any) {
+		val auditId = auditQueueRingBuffer.next()
+		auditQueueRingBuffer.get(auditId).value = d
+		auditQueueRingBuffer.publish(auditId)
 	}
 	
 }
