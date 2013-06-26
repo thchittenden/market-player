@@ -22,6 +22,8 @@ class TestStrategyBuilder extends StrategyBuilder[TestStrategy] {
 		errorMessage.append("\n\tSymbol: ").append(symbolOption)
 		errorMessage.append("\n\tOrderQueue: ").append(orderQueueOption)
 		errorMessage.append("\n\tDataQueue: ").append(dataQueueOption)
+		errorMessage.append("\n\tOrderIDGen: ").append(orderIdGenOption)
+		errorMessage.append("\n\tInvalidateCurPos: ").append(invalidateCurrentPosOption)
 		new IllegalStateException(errorMessage.toString)
 	}
 	
@@ -31,10 +33,15 @@ class TestStrategyBuilder extends StrategyBuilder[TestStrategy] {
 			symbol <- symbolOption
 			orderQueue <- orderQueueOption
 			dataQueue <- dataQueueOption
-		} yield new TestStrategy(symbol, money, orderQueue, dataQueue)) getOrElse(throw incompleteException)
+			orderIdGen <- orderIdGenOption
+			invalidateCurPos <- invalidateCurrentPosOption
+		} yield new TestStrategy(symbol, money, orderQueue, dataQueue, orderIdGen, invalidateCurPos)) getOrElse(throw incompleteException)
 }
 
-class TestStrategy(symbol: String, money: Double, oq: Disruptor[Container], dq: Disruptor[Container])(implicit executor: Executor) extends Strategy(oq, dq) with Logger {
+class TestStrategy(symbol: String, money: Double, 
+		  		   oq: Disruptor[Container], dq: Disruptor[Container],
+				   orderIdGen: () => Int, invalidateCurPos: () => Unit)
+				  (implicit executor: Executor) extends Strategy(oq, dq, orderIdGen, invalidateCurPos) with Logger {
 	
 	val title = s"Testing ($symbol)"
 	val dataRequests = Seq(SimpleRTStockRequest(symbol))

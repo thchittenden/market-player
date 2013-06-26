@@ -17,6 +17,7 @@ import scala.language.postfixOps
 import thc.sandbox.marketmanager.data.AskPrice
 import thc.sandbox.marketmanager.data.BidPrice
 import thc.sandbox.marketmanager.data.AskSize
+import java.util.concurrent.atomic.AtomicInteger
 
 class DummyMarketConnection extends MarketConnection {
 		
@@ -24,26 +25,31 @@ class DummyMarketConnection extends MarketConnection {
 	
 	val r: Random = new Random()
 	val openTickers: mutable.Map[Int, Cancellable] = mutable.Map.empty
-	var curTickerId = 0;
-	var curOrderId = 0;
+	val curTickerId = new AtomicInteger(0)
+	val curOrderId = new AtomicInteger(0)
 	var callback: (Int, ReceiveType) => Unit = (_, _) => ()
 	
 	def registerCallback(cb: (Int, ReceiveType) => Unit) {
 		callback = cb
 	}
 	
+	def stop() {
+		
+	}
+	
 	def subscribe(dr: DataRequest): Int = {
-		curTickerId += 1; 
-		createNewDataSpawner(curTickerId)
-		curTickerId
+		val tickerId = curTickerId.getAndIncrement
+		createNewDataSpawner(tickerId)
+		tickerId
 	}
 	
 	def unsubscribe(tickerId: Int) {
 		openTickers.remove(tickerId) foreach (_.cancel)
 	}
 	
-	def placeOrder(or: OrderRequest): Int =  {
-		curOrderId += 1; curOrderId
+	def nextOrderId() = curOrderId.getAndIncrement()
+	def placeOrder(or: OrderRequest) {
+		//its dumb, remember
 	}
 	def cancelOrder(orderId: Int) {
 		//yeahhh nada

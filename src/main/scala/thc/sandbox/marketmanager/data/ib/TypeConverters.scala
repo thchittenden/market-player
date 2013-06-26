@@ -36,16 +36,16 @@ object TypeConverters {
 		ret.m_currency = CURRENCY
 		ret.m_exchange = EXCHANGE
 		or match {
-			case SimpleStockMarketBuyOrder(symbol: String, _) => 
+			case SimpleStockMarketBuyOrder(_, symbol, _) => 
 				ret.m_symbol = symbol
 				ret.m_secType = STOCK_SEC_TYPE
-			case SimpleStockMarketSellOrder(symbol: String, _) =>
+			case SimpleStockMarketSellOrder(_, symbol, _) =>
 				ret.m_symbol = symbol
 				ret.m_secType = STOCK_SEC_TYPE
-			case SimpleStockLimitBuyOrder(symbol: String, _, _) =>
+			case SimpleStockLimitBuyOrder(_, symbol, _, _) =>
 				ret.m_symbol = symbol
 				ret.m_secType = STOCK_SEC_TYPE
-			case SimpleStockLimitSellOrder(symbol: String, _, _) =>
+			case SimpleStockLimitSellOrder(_, symbol, _, _) =>
 				ret.m_symbol = symbol
 				ret.m_secType = STOCK_SEC_TYPE
 		}
@@ -54,21 +54,22 @@ object TypeConverters {
 	
 	implicit def orderRequestAsOrder(or: OrderRequest): Order = {
 		val ret = new Order()
+		ret.m_orderId = or.id
 		or match {
-			case SimpleStockMarketBuyOrder(symbol: String, quantity: Int) => 
+			case SimpleStockMarketBuyOrder(_, symbol: String, quantity: Int) => 
 				ret.m_totalQuantity = quantity
 				ret.m_action = BUY
 				ret.m_orderType = MARKET_ORDER_TYPE
-			case SimpleStockMarketSellOrder(symbol: String, quantity: Int) =>
+			case SimpleStockMarketSellOrder(_, symbol: String, quantity: Int) =>
 				ret.m_totalQuantity = quantity
 				ret.m_action = SELL
 				ret.m_orderType = MARKET_ORDER_TYPE	
-			case SimpleStockLimitBuyOrder(symbol: String, quantity: Int, limit: Double) =>
+			case SimpleStockLimitBuyOrder(_, symbol: String, quantity: Int, limit: Double) =>
 				ret.m_totalQuantity = quantity
 				ret.m_lmtPrice = limit
 				ret.m_action = BUY
 				ret.m_orderType = LIMIT_ORDER_TYPE
-			case SimpleStockLimitSellOrder(symbol: String, quantity: Int, limit: Double) =>
+			case SimpleStockLimitSellOrder(_, symbol: String, quantity: Int, limit: Double) =>
 				ret.m_totalQuantity = quantity
 				ret.m_lmtPrice = limit
 				ret.m_action = SELL

@@ -43,6 +43,8 @@ class MarketManager(val conn: MarketConnection) extends Logger {
 	def addStrategy[T <: Strategy](sb: StrategyBuilder[T]) {
 		sb.dataQueueOption = Some(marketData)
 		sb.orderQueueOption = Some(orderData)
+		sb.orderIdGenOption = Some(conn.nextOrderId)
+		sb.invalidateCurrentPosOption = Some(onInvalidateCurrentPosition)
 		onNewStrategy(sb.construct)	
 	}
 	
@@ -71,5 +73,13 @@ class MarketManager(val conn: MarketConnection) extends Logger {
 		strategies foreach (_.start())
 		orderData.start()
 		marketData.start()
+	}
+	
+	def stop() {
+		logger.info("shutting down!")
+		strategies foreach (_.stop())
+		conn.stop()
+		orderData.shutdown()
+		marketData.shutdown()
 	}
 }

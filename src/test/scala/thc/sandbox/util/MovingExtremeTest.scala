@@ -3,7 +3,6 @@ package thc.sandbox.util
 import org.junit.Test
 import org.junit.Assert._
 
-
 class MovingExtremeTest2 {
 
 	val testData: List[Double] = List(1, 4, 2, 3, 5, 8, 12, 4, 9, 29, 1, 2, 6, 2, 4, 1, 9, 2)

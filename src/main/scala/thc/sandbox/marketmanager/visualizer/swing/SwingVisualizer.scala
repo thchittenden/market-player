@@ -18,8 +18,9 @@ import thc.sandbox.marketmanager.visualizer.RangePolicyFixedLookback
 import thc.sandbox.marketmanager.visualizer.RangePolicyPadded
 import thc.sandbox.marketmanager.visualizer.swing.SwingChart._
 import thc.sandbox.marketmanager.data.ReceiveType
+import thc.sandbox.slf4s.Logger
 
-trait SwingVisualizer extends MarketManager {
+trait SwingVisualizer extends MarketManager with Logger {
 
 	object StockVisualizer extends SimpleSwingApplication {
 		val tabs = new TabbedPane
@@ -27,8 +28,15 @@ trait SwingVisualizer extends MarketManager {
 		tabs.tabPlacement = Alignment.Top
 		val statistics = new Statistics
 		statistics.preferredSize = new Dimension(600, 50)
-		
+
 		def top = new MainFrame {
+
+			override def closeOperation() {
+				//invoke stop in MarketManager
+				stop()
+				super.closeOperation()
+			}
+			
 			title = "Stock Visualizer"
 				
 			contents = new BoxPanel(Orientation.Vertical) {
@@ -60,8 +68,7 @@ trait SwingVisualizer extends MarketManager {
 			case d if d == 0 => Color.black
 			case _           => Color.red
 		}
-	}
-	
+	}	
 }
 
 class Statistics extends GridPanel(2, 4) {

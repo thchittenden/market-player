@@ -2,9 +2,7 @@ package thc.sandbox.marketmanager.data.ib
 
 import scala.collection.mutable
 import scala.concurrent.Lock
-
 import org.joda.time.DateTime
-
 import com.ib.client.CommissionReport
 import com.ib.client.Contract
 import com.ib.client.ContractDetails
@@ -31,6 +29,7 @@ import thc.sandbox.marketmanager.data.OrderRequest
 import thc.sandbox.marketmanager.data.OrderStatus
 import thc.sandbox.marketmanager.data.ReceiveType
 import thc.sandbox.slf4s.Logger
+import java.util.concurrent.atomic.AtomicInteger
 
 class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 
@@ -39,11 +38,15 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 		callback = cb;
 	}
 	
+	def stop() {
+		clientSocket.eDisconnect()
+	}
+	
 	//create clientSocket
 	val clientSocket = new EClientSocket(this)
 	
-	var curTickerId = 0
-	var curOrderId = 0
+	val curTickerId = new AtomicInteger(0)
+	val curOrderId = new AtomicInteger(0)
 	
 	//map both directions for efficient querying either way
 	val openRequests: mutable.Map[DataRequest, Int] = mutable.HashMap.empty
@@ -51,7 +54,7 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 
 	//subscription logic
 	private def subscribeNew(dr: DataRequest): Int = {
-		val tickerId = curTickerId; curTickerId += 1;
+		val tickerId = curTickerId.getAndIncrement
 
 		openRequests.put(dr, tickerId)
 		openTickers.put(tickerId, dr)
@@ -68,10 +71,10 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 
 
 	// order logic
-	def placeOrder(or: OrderRequest): Int = {
-		val orderId = curOrderId; curOrderId += 1
-		clientSocket.placeOrder(orderId, or, or)
-		return orderId
+	def nextOrderId(): Int = curOrderId.getAndIncrement
+		
+	def placeOrder(or: OrderRequest) = {
+		clientSocket.placeOrder(or.id, or, or)
 	}
 	
 	def cancelOrder(id: Int) { 
@@ -161,7 +164,7 @@ class IBMarketConnection extends MarketConnection with EWrapper with Logger {
 
 	}
 	def nextValidId(orderId: Int) {
-		curOrderId = orderId
+		curOrderId.set(orderId)
 	}
 	def contractDetails(reqId: Int, contractDetails: ContractDetails) {
 

@@ -9,15 +9,25 @@ import thc.sandbox.marketmanager.data.DataRequest
 import java.util.concurrent.Executor
 import scala.concurrent.Future
 import collection._
+import thc.sandbox.marketmanager.data.OrderFilled
+import thc.sandbox.marketmanager.data.OrderStatus
+import thc.sandbox.marketmanager.data.OrderCancelled
+import thc.sandbox.marketmanager.data.BuyRequest
+import thc.sandbox.marketmanager.data.SellRequest
 
 abstract class StrategyBuilder[T <: Strategy] {
 	var orderQueueOption: Option[Disruptor[Container]] = None
 	var dataQueueOption: Option[Disruptor[Container]] = None
+	var orderIdGenOption: Option[() => Int] = None
+	var invalidateCurrentPosOption: Option[() => Unit] = None
 	
 	def construct(implicit executor: Executor): T 
 }
 
-abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[Container])(implicit executor: Executor) {
+abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[Container], orderIdGen: () => Int, invalidateCurPos: () => Unit)(implicit executor: Executor) {
+	
+	val buyOrders: mutable.Set[Int] = mutable.Set.empty
+	val sellOrders: mutable.Set[Int] = mutable.Set.empty
 	
 	//to be implemented by strategies
 	val title: String
@@ -30,6 +40,9 @@ abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[C
 	def start() {
 		auditQueue.start()
 	}
+	def stop() {
+		auditQueue.shutdown()
+	}
 		
 	var ids: Set[Int] = immutable.BitSet.empty
 	private val dataQueueHandler = new EventHandler[Container](){
@@ -40,17 +53,22 @@ abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[C
 			
 			handleData(c.value)
 			publishAudit(c.value)
+			invalidatePositionIfNeeded(c.value)
 		}
 	}
 	dataQueue.handleEventsWith(dataQueueHandler)
 
 	private val orderRingBuffer: RingBuffer[Container] = orderQueue.getRingBuffer();
 	protected def placeOrder(or: OrderRequest) {
-		if(orderQueue eq null) throw new IllegalStateException("no order queue registerd!")
-		val orderId = orderRingBuffer.next()
-		orderRingBuffer.get(orderId).value = or
-		orderRingBuffer.publish(orderId)
-		
+		or match {
+			case _: BuyRequest => buyOrders.add(or.id)
+			case _: SellRequest => sellOrders.add(or.id)
+		}
+
+		val orderQueueId = orderRingBuffer.next()
+		orderRingBuffer.get(orderQueueId).value = or
+		orderRingBuffer.publish(orderQueueId)
+
 		publishAudit(or)
 	}
 	
@@ -60,4 +78,10 @@ abstract class Strategy(orderQueue: Disruptor[Container], dataQueue: Disruptor[C
 		auditQueueRingBuffer.publish(auditId)
 	}
 	
+	def invalidatePositionIfNeeded(dr: Any) = dr match {
+		case _: OrderStatus => invalidateCurPos()
+		case _: OrderFilled => invalidateCurPos()
+		case _: OrderCancelled => invalidateCurPos()
+		case _ =>
+	}
 }

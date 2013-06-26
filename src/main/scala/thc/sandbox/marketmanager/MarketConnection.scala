@@ -14,6 +14,9 @@ trait MarketConnection {
 	def subscribe(dr: DataRequest): Int
 	def unsubscribe(tickerId: Int): Unit
 	
-	def placeOrder(or: OrderRequest): Int
+	def nextOrderId(): Int
+	def placeOrder(or: OrderRequest): Unit
 	def cancelOrder(orderId: Int): Unit
+	
+	def stop(): Unit
 }

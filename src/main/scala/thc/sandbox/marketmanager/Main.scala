@@ -5,6 +5,7 @@ import thc.sandbox.slf4s.Logger
 import thc.sandbox.marketmanager.strategies.TestStrategyBuilder
 import thc.sandbox.marketmanager.visualizer.swing.SwingVisualizer
 import thc.sandbox.marketmanager.data.dummy.DummyMarketConnection
+import thc.sandbox.marketmanager.benchmarker.Benchmarker
 
 object Main extends Logger {
 	
@@ -12,7 +13,7 @@ object Main extends Logger {
 				
 		val connection = getDummyConnection()
 		
-		val mm = new MarketManager(connection) with SwingVisualizer
+		val mm = new MarketManager(connection) with SwingVisualizer// with Benchmarker 
 		
 		val tsb = new TestStrategyBuilder
 		tsb.moneyOption = Some(1000.00)
@@ -21,11 +22,7 @@ object Main extends Logger {
 		tsb.symbolOption = Some("GOOG")
 		mm.addStrategy(tsb)
 		
-		mm.start()
-		
-//		mm.addStrategy(TestStrategy, "GOOG", 1000.00, false)
-//		mm.addStrategy(TestStrategy, "AAPL", 1000.00, false)
-		
+		mm.start()		
 	}
 	
 	def getIBConnection(): MarketConnection = {

@@ -1,21 +1,23 @@
 package thc.sandbox.marketmanager.strategies
 
 import java.util.concurrent.Executor
+
 import scala.collection.mutable
+
 import com.lmax.disruptor.dsl.Disruptor
+
 import thc.sandbox.marketmanager.data.AskPrice
 import thc.sandbox.marketmanager.data.BidPrice
 import thc.sandbox.marketmanager.data.ClosingPrice
 import thc.sandbox.marketmanager.data.Container
 import thc.sandbox.marketmanager.data.LastPrice
 import thc.sandbox.marketmanager.data.LastSize
+import thc.sandbox.marketmanager.data.SimpleRTStockRequest
 import thc.sandbox.marketmanager.data.SimpleStockLimitBuyOrder
 import thc.sandbox.marketmanager.data.SimpleStockLimitSellOrder
 import thc.sandbox.slf4s.Logger
 import thc.sandbox.util.SimpleMovingAverage
 import thc.sandbox.util.Stochastic
-import thc.sandbox.marketmanager.data.SimpleStockLimitBuyOrder
-import thc.sandbox.marketmanager.data.SimpleRTStockRequest
 
 class ScalpingStrategyBuilder extends StrategyBuilder[ScalpingStrategy] {
 	var moneyOption: Option[Double] = None
@@ -27,6 +29,8 @@ class ScalpingStrategyBuilder extends StrategyBuilder[ScalpingStrategy] {
 		errorMessage.append("\n\tSymbol: ").append(symbolOption)
 		errorMessage.append("\n\tOrderQueue: ").append(orderQueueOption)
 		errorMessage.append("\n\tDataQueue: ").append(dataQueueOption)
+		errorMessage.append("\n\tOrderIDGen: ").append(orderIdGenOption)
+		errorMessage.append("\n\tInvalidateCurPos: ").append(invalidateCurrentPosOption)
 		new IllegalStateException(errorMessage.toString)
 	}
 	
@@ -36,10 +40,15 @@ class ScalpingStrategyBuilder extends StrategyBuilder[ScalpingStrategy] {
 			symbol <- symbolOption
 			orderQueue <- orderQueueOption
 			dataQueue <- dataQueueOption
-		} yield new ScalpingStrategy(symbol, money, orderQueue, dataQueue)) getOrElse(throw incompleteException)
+			orderIdGen <- orderIdGenOption
+			invalidateCurPos <- invalidateCurrentPosOption
+		} yield new ScalpingStrategy(symbol, money, orderQueue, dataQueue, orderIdGen, invalidateCurPos)) getOrElse(throw incompleteException)
 }
 
-class ScalpingStrategy(symbol: String, money: Double, oq: Disruptor[Container], dq: Disruptor[Container])(implicit executor: Executor) extends Strategy(oq, dq) with Logger {
+class ScalpingStrategy(symbol: String, money: Double, 
+					   oq: Disruptor[Container], dq: Disruptor[Container], 
+					   orderIdGen: () => Int, invalidateCurPos: () => Unit)
+					  (implicit executor: Executor) extends Strategy(oq, dq, orderIdGen, invalidateCurPos) with Logger {
 	
 	val title = s"Scalping Strategy ($symbol)"
 	val dataRequests = Seq(SimpleRTStockRequest(symbol))
@@ -65,18 +74,22 @@ class ScalpingStrategy(symbol: String, money: Double, oq: Disruptor[Container], 
 		if(stochasticBelow20 && stochastic.percentD > 20) {
 			stochasticBelow20 = false
 			if(money > orderSize) {
-				val quantity: Int = (orderSize / lastAsk).toInt
-				val order = SimpleStockLimitBuyOrder(symbol, quantity, lastBid)
+				val quantity = (orderSize / lastAsk).toInt
+				val id = orderIdGen()
+				val order = SimpleStockLimitBuyOrder(id, symbol, quantity, lastBid)
+				placeOrder(order)
 			}
 		}
 		if(stochasticAbove80 && stochastic.percentD < 80) {
 			if(quantityHeld > 0) {
-				val order = SimpleStockLimitSellOrder(symbol, quantityHeld, lastBid)
+				val id = orderIdGen()
+				val order = SimpleStockLimitSellOrder(id, symbol, quantityHeld, lastBid)
+				placeOrder(order)
 			}
 		}
 		if(stochastic.percentD > 80) stochasticAbove80 = true
 		if(stochastic.percentD < 20) stochasticBelow20 = true
-		logger.trace(f"stochastic: %K = ${stochastic.percentK}%2.2f, %d = ${stochastic.percentD}%2.2f")
+		logger.trace(f"stochastic: %%K = ${stochastic.percentK}%2.2f, %%d = ${stochastic.percentD}%2.2f")
 	}
 
 	
