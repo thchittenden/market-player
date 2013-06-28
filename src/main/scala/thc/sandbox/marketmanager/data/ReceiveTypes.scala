@@ -23,4 +23,7 @@ case class OrderFilled(id: Int, filled: Int, avgFillPrice: Double, time: DateTim
 case class OrderCancelled(id: Int, filled: Int, avgFillPrice: Double, time: DateTime) extends OrderDataType
 
 abstract sealed class CalculatedType extends ReceiveType
-case class Stochastic(value: Double, time: DateTime) extends CalculatedType
+case class StochasticPercentK(percentK: Double, time: DateTime) extends CalculatedType
+case class StochasticPercentD(percentD: Double, time: DateTime) extends CalculatedType
+case class MACDLine(value: Double, time: DateTime) extends CalculatedType
+case class MACDSignal(value: Double, time: DateTime) extends CalculatedType

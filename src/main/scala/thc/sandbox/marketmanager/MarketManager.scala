@@ -11,6 +11,7 @@ import thc.sandbox.slf4s.Logger
 import thc.sandbox.marketmanager.strategies.Strategy
 import thc.sandbox.marketmanager.strategies.StrategyBuilder
 import collection._
+import thc.sandbox.marketmanager.data.DataRequest
 
 class MarketManager(val conn: MarketConnection) extends Logger {
 
@@ -53,8 +54,11 @@ class MarketManager(val conn: MarketConnection) extends Logger {
 	protected def onNewStrategy(s: Strategy) { 
 		currentPosition += s.currentPosition
 		initialPosition += s.currentPosition
-		s.ids = immutable.BitSet((for (dr <- s.dataRequests) yield conn.subscribe(dr)): _*)
+		s.ids = immutable.BitSet((for (dr <- s.dataRequests) yield onSubscribe(dr)): _*)
 		strategies.add(s) 
+	}
+	protected def onSubscribe(dr: DataRequest): Int = {
+		conn.subscribe(dr)
 	}
 	protected def onNewOrder(or: OrderRequest) {
 		conn.placeOrder(or) 
@@ -70,9 +74,9 @@ class MarketManager(val conn: MarketConnection) extends Logger {
 	}
 	
 	def start() {
-		strategies foreach (_.start())
 		orderData.start()
 		marketData.start()
+		strategies foreach (_.start())
 	}
 	
 	def stop() {

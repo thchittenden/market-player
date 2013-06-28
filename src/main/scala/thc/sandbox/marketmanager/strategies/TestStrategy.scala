@@ -11,6 +11,11 @@ import thc.sandbox.slf4s.Logger
 import thc.sandbox.util.SimpleMovingAverage
 import thc.sandbox.util.Stochastic
 import thc.sandbox.marketmanager.data.AskPrice
+import thc.sandbox.marketmanager.data.StochasticPercentK
+import thc.sandbox.marketmanager.data.StochasticPercentD
+import thc.sandbox.util.MACDCalc
+import thc.sandbox.marketmanager.data.MACDLine
+import thc.sandbox.marketmanager.data.MACDSignal
 
 class TestStrategyBuilder extends StrategyBuilder[TestStrategy] {
 	var moneyOption: Option[Double] = None
@@ -51,24 +56,30 @@ class TestStrategy(symbol: String, money: Double,
 	val STaveragePrice = new SimpleMovingAverage[Double](10)
 	val MTaveragePrice = new SimpleMovingAverage[Double](20)
 	val stochastic = new Stochastic(14, 3, 3)
+	val macd = new MACDCalc(12, 26, 9)
 	
 	var lastPrice: Double = 0
 	
 	def handleData(data: Any) {
 		logger.trace(s"TestStrategy($symbol) received data: $data")
 		data match {
-			case LastPrice(_, price, _) => 
+			case LastPrice(_, price, now) => 
 				lastPrice = price
 				STaveragePrice.add(price)
 				MTaveragePrice.add(price)
-			case AskPrice(_, price, now) =>
 				stochastic.add(price)
-				publishAudit(thc.sandbox.marketmanager.data.Stochastic(stochastic.percentD, now))
+				macd.add(price)
+				publishAudit(MACDLine(macd.macd, now))
+				publishAudit(MACDSignal(macd.signal, now))
+				publishAudit(StochasticPercentK(stochastic.percentD, now))
+				publishAudit(StochasticPercentD(stochastic.percentDslow, now))
+			case AskPrice(_, price, _) =>
+
 			case LastSize(_, size, _) =>
 				averageVolume.add(size)
 			case _ =>
 		}
-		logger.info(f"$symbol: price $$$lastPrice%2.2f ST avg price $$${STaveragePrice.avg}%2.2f, MT avg price $$${MTaveragePrice.avg}%2.2f, avg volume ${averageVolume.avg}%2.3f ($data)")
+		logger.debug(f"$symbol: price $$$lastPrice%2.2f ST avg price $$${STaveragePrice.avg}%2.2f, MT avg price $$${MTaveragePrice.avg}%2.2f, avg volume ${averageVolume.avg}%2.3f ($data)")
 	}
 	
 }

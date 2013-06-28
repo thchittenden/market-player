@@ -112,10 +112,14 @@ class StrategyVisualizer(s: Strategy) extends GridBagPanel {
 				c.weightx = 1.0
 				c.weighty = 0.33
 				c.grid = (0, 1)
-			case CalcChart =>
+			case StochasticChart =>
 				c.weightx = 1.0
 				c.weighty = 0.33
 				c.grid = (0, 2)
+			case MACDChart =>
+				c.weightx = 1.0
+				c.weighty = 0.33
+				c.grid = (0, 3)
 		}
 		return c
 	}

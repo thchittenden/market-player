@@ -4,7 +4,7 @@ import com.lmax.disruptor.EventFactory
 
 abstract sealed class RequestType
 
-abstract sealed class DataRequest extends RequestType
+abstract sealed class DataRequest extends RequestType with Symbol
 case class SimpleRTStockRequest(symbol: String) extends DataRequest
 
 

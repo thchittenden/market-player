@@ -4,7 +4,7 @@
 	<groupId>thc.sandbox</groupId>
 	<artifactId>market-player</artifactId>
 	<version>0.0.1</version>
-	
+
 	<dependencies>
 		<dependency>
 			<groupId>com.ib</groupId>
@@ -63,6 +63,11 @@
 			<artifactId>scala-swing</artifactId>
 			<version>2.10.1</version>
 		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+			<version>2.4</version>
+		</dependency>
 	</dependencies>
 
 	<build>
@@ -81,6 +86,36 @@
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+			
+			<!-- for setting the main class in the manifest -->
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-jar-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<mainClass>thc.sandbox.marketmanager.Main</mainClass>
+							<packageName>thc.sandbox.marketmanager</packageName>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+			
+			<!-- for building a standalone jar -->
+			<plugin>
+				<artifactId>maven-assembly-plugin</artifactId>
+				<configuration>
+					<archive>
+						<manifest>
+							<mainClass>thc.sandbox.marketmanager.Main</mainClass>
+							<packageName>thc.sandbox.marketmanager</packageName>
+						</manifest>
+					</archive>
+					<descriptorRefs>
+						<descriptorRef>jar-with-dependencies</descriptorRef>
+					</descriptorRefs>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>

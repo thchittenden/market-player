@@ -15,6 +15,9 @@ import thc.sandbox.marketmanager.data.OrderCancelled
 import thc.sandbox.marketmanager.data.BuyRequest
 import thc.sandbox.marketmanager.data.SellRequest
 
+/**
+ * We use a Builder pattern to ensure proper initialization across multiple levels
+ */
 abstract class StrategyBuilder[T <: Strategy] {
 	var orderQueueOption: Option[Disruptor[Container]] = None
 	var dataQueueOption: Option[Disruptor[Container]] = None

@@ -1,23 +1,24 @@
 package thc.sandbox.marketmanager.data.dummy
 
-import thc.sandbox.marketmanager.MarketConnection
-import thc.sandbox.marketmanager.data.DataRequest
-import thc.sandbox.marketmanager.data.OrderRequest
-import collection._
-import scala.concurrent.duration._
-import scala.util.Random
-import thc.sandbox.marketmanager.data.LastPrice
-import org.joda.time.DateTime
-import thc.sandbox.marketmanager.data.ReceiveType
-import akka.actor.ActorSystem
-import scala.concurrent.duration._
-import akka.actor.Cancellable
+import java.util.concurrent.atomic.AtomicInteger
+
+import scala.collection.mutable
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.language.postfixOps
+import scala.concurrent.duration.DurationInt
+import scala.util.Random
+
+import org.joda.time.DateTime
+
+import akka.actor.ActorSystem
+import akka.actor.Cancellable
+import thc.sandbox.marketmanager.MarketConnection
 import thc.sandbox.marketmanager.data.AskPrice
-import thc.sandbox.marketmanager.data.BidPrice
 import thc.sandbox.marketmanager.data.AskSize
-import java.util.concurrent.atomic.AtomicInteger
+import thc.sandbox.marketmanager.data.BidPrice
+import thc.sandbox.marketmanager.data.DataRequest
+import thc.sandbox.marketmanager.data.LastPrice
+import thc.sandbox.marketmanager.data.OrderRequest
 
 class DummyMarketConnection extends MarketConnection {
 		
@@ -27,11 +28,6 @@ class DummyMarketConnection extends MarketConnection {
 	val openTickers: mutable.Map[Int, Cancellable] = mutable.Map.empty
 	val curTickerId = new AtomicInteger(0)
 	val curOrderId = new AtomicInteger(0)
-	var callback: (Int, ReceiveType) => Unit = (_, _) => ()
-	
-	def registerCallback(cb: (Int, ReceiveType) => Unit) {
-		callback = cb
-	}
 	
 	def stop() {
 		
@@ -57,13 +53,13 @@ class DummyMarketConnection extends MarketConnection {
 	
 	
 	
-	def createNewDataSpawner(id: Int) {
+	private def createNewDataSpawner(id: Int) {
 		val centerPoint = r.nextInt(400) + 50
 		val variance = 0.01
 		openTickers.put(id, as.scheduler.schedule(0 milliseconds, 1 second)(sendRandomData(id, centerPoint, variance)))
 	}
 	
-	def sendRandomData(id: Int, center: Double, variance: Double) {
+	private def sendRandomData(id: Int, center: Double, variance: Double) {
 		val now = new DateTime()
 		val last = r.nextGaussian * variance + center
 		val ask = last + 0.05

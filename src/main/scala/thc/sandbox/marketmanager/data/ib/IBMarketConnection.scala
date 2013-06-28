@@ -1,8 +1,11 @@
 package thc.sandbox.marketmanager.data.ib
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.collection.mutable
-import scala.concurrent.Lock
+
 import org.joda.time.DateTime
+
 import com.ib.client.CommissionReport
 import com.ib.client.Contract
 import com.ib.client.ContractDetails
@@ -12,6 +15,7 @@ import com.ib.client.Execution
 import com.ib.client.Order
 import com.ib.client.OrderState
 import com.ib.client.UnderComp
+
 import TypeConverters.dataRequestAsContract
 import TypeConverters.orderRequestAsContract
 import TypeConverters.orderRequestAsOrder
@@ -27,16 +31,8 @@ import thc.sandbox.marketmanager.data.OrderCancelled
 import thc.sandbox.marketmanager.data.OrderFilled
 import thc.sandbox.marketmanager.data.OrderRequest
 import thc.sandbox.marketmanager.data.OrderStatus
-import thc.sandbox.marketmanager.data.ReceiveType
-import thc.sandbox.slf4s.Logger
-import java.util.concurrent.atomic.AtomicInteger
 
-class IBMarketConnection extends MarketConnection with EWrapper with Logger {
-
-	var callback = (id: Int, x: ReceiveType) => logger.error(s"received data without callback! $x")
-	def registerCallback(cb: (Int, ReceiveType) => Unit) {
-		callback = cb;
-	}
+class IBMarketConnection extends MarketConnection with EWrapper {
 	
 	def stop() {
 		clientSocket.eDisconnect()
